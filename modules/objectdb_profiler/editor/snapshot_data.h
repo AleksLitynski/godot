@@ -28,16 +28,15 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef SNAPSHOT_DATA_H
-#define SNAPSHOT_DATA_H
+#pragma once
 
 #include "editor/debugger/editor_debugger_inspector.h"
 
 class GameStateSnapshot;
 class GameStateSnapshotRef;
 
-class SnapshotDataObject : public EditorDebuggerRemoteObject {
-	GDCLASS(SnapshotDataObject, EditorDebuggerRemoteObject);
+class SnapshotDataObject : public EditorDebuggerRemoteObjects {
+	GDCLASS(SnapshotDataObject, EditorDebuggerRemoteObjects);
 
 	HashSet<ObjectID> _unique_references(const HashMap<String, ObjectID> &p_refs);
 	String _get_script_name(Ref<Script> p_script);
@@ -52,7 +51,7 @@ public:
 	HashSet<ObjectID> get_unique_inbound_references();
 
 	SnapshotDataObject(SceneDebuggerObject &p_obj, GameStateSnapshot *p_snapshot) :
-			EditorDebuggerRemoteObject(p_obj), snapshot(p_snapshot) {}
+			EditorDebuggerRemoteObjects(p_obj), snapshot(p_snapshot) {}
 
 	String get_name();
 	String get_node_path();
@@ -93,5 +92,3 @@ public:
 	bool unreference();
 	GameStateSnapshot *get_snapshot();
 };
-
-#endif // SNAPSHOT_DATA_H

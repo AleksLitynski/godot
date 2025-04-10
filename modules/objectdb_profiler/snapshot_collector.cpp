@@ -120,7 +120,7 @@ Error SnapshotCollector::parse_message(void *p_user, const String &p_msg, const 
 		// many bytes can be queued to send. Serializing to a string means we never hit the object
 		// limit, and only have to deal with the byte limit.
 		// Compress the snapshot in the game client to make sending the snapshot from game to editor a little faster.
-		core_bind::Marshalls *m = core_bind::Marshalls::get_singleton();
+		CoreBind::Marshalls *m = CoreBind::Marshalls::get_singleton();
 		Vector<uint8_t> objs_buffer = m->base64_to_raw(m->variant_to_base64(objects));
 		Vector<uint8_t> objs_buffer_compressed;
 		objs_buffer_compressed.resize(objs_buffer.size());

@@ -101,7 +101,7 @@ String SnapshotDataObject::get_name() {
 		}
 	}
 
-	return found_type_name + "_" + uitos(remote_object_id);
+	return found_type_name + "_" + uitos(remote_object_ids[0]);
 }
 
 bool SnapshotDataObject::is_refcounted() {
@@ -209,8 +209,9 @@ void GameStateSnapshot::_get_rc_cycles(
 void GameStateSnapshot::recompute_references() {
 	for (const KeyValue<ObjectID, SnapshotDataObject *> &obj : objects) {
 		Dictionary values;
-		for (const KeyValue<StringName, Variant> &kv : obj.value->prop_values) {
-			values[kv.key] = kv.value;
+		for (const KeyValue<StringName, TypedDictionary<uint64_t, Variant>> &kv : obj.value->prop_values) {
+			// Should only ever be one entry in this context.
+			values[kv.key] = kv.value.begin()->value;
 		}
 
 		Variant values_variant(values);
@@ -255,7 +256,7 @@ Ref<GameStateSnapshotRef> GameStateSnapshot::create_ref(const String &p_snapshot
 	Vector<uint8_t> snapshot_buffer_decompressed;
 	int success = Compression::decompress_dynamic(&snapshot_buffer_decompressed, -1, p_snapshot_buffer.ptr(), p_snapshot_buffer.size(), Compression::MODE_DEFLATE);
 	ERR_FAIL_COND_V_MSG(success != Z_OK, nullptr, "ObjectDB Snapshot could not be parsed. Failed to decompress snapshot.");
-	core_bind::Marshalls *m = core_bind::Marshalls::get_singleton();
+	CoreBind::Marshalls *m = CoreBind::Marshalls::get_singleton();
 	Array snapshot_data = m->base64_to_variant(m->raw_to_base64(snapshot_buffer_decompressed));
 	ERR_FAIL_COND_V_MSG(snapshot_data.is_empty(), nullptr, "ObjectDB Snapshot could not be parsed. Variant array is empty.");
 	const Variant &first_item = snapshot_data.get(0);

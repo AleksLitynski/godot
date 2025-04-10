@@ -232,11 +232,7 @@ void AnimationNodeStateMachineEditor::_state_machine_gui_input(const Ref<InputEv
 
 		// First find closest lines using point-to-segment distance.
 		for (int i = 0; i < transition_lines.size(); i++) {
-			Vector2 s[2] = {
-				transition_lines[i].from,
-				transition_lines[i].to
-			};
-			Vector2 cpoint = Geometry2D::get_closest_point_to_segment(mb->get_position(), s);
+			Vector2 cpoint = Geometry2D::get_closest_point_to_segment(mb->get_position(), transition_lines[i].from, transition_lines[i].to);
 			float d = cpoint.distance_to(mb->get_position());
 
 			if (d > transition_lines[i].width) {
@@ -464,14 +460,14 @@ void AnimationNodeStateMachineEditor::_state_machine_gui_input(const Ref<InputEv
 				}
 				Vector2 npos = state_machine->get_node_position(E);
 
-				float d_x = ABS(npos.x - cpos.x);
+				float d_x = Math::abs(npos.x - cpos.x);
 				if (d_x < MIN(5, best_d_x)) {
 					drag_ofs.x -= cpos.x - npos.x;
 					best_d_x = d_x;
 					snap_x = E;
 				}
 
-				float d_y = ABS(npos.y - cpos.y);
+				float d_y = Math::abs(npos.y - cpos.y);
 				if (d_y < MIN(5, best_d_y)) {
 					drag_ofs.y -= cpos.y - npos.y;
 					best_d_y = d_y;
@@ -545,11 +541,7 @@ void AnimationNodeStateMachineEditor::_state_machine_gui_input(const Ref<InputEv
 			int closest = -1;
 			float closest_d = 1e20;
 			for (int i = 0; i < transition_lines.size(); i++) {
-				Vector2 s[2] = {
-					transition_lines[i].from,
-					transition_lines[i].to
-				};
-				Vector2 cpoint = Geometry2D::get_closest_point_to_segment(mm->get_position(), s);
+				Vector2 cpoint = Geometry2D::get_closest_point_to_segment(mm->get_position(), transition_lines[i].from, transition_lines[i].to);
 				float d = cpoint.distance_to(mm->get_position());
 				if (d > transition_lines[i].width) {
 					continue;
@@ -639,18 +631,18 @@ void AnimationNodeStateMachineEditor::_open_menu(const Vector2 &p_position) {
 		}
 	}
 
-	List<StringName> classes;
-	ClassDB::get_inheriters_from_class("AnimationRootNode", &classes);
+	LocalVector<StringName> classes;
+	ClassDB::get_inheriters_from_class("AnimationRootNode", classes);
 	classes.sort_custom<StringName::AlphCompare>();
 
-	for (List<StringName>::Element *E = classes.front(); E; E = E->next()) {
-		String name = String(E->get()).replace_first("AnimationNode", "");
+	for (const StringName &class_name : classes) {
+		String name = String(class_name).replace_first("AnimationNode", "");
 		if (name == "Animation" || name == "StartState" || name == "EndState") {
 			continue; // nope
 		}
 		int idx = menu->get_item_count();
 		menu->add_item(vformat(TTR("Add %s"), name), idx);
-		menu->set_item_metadata(idx, E->get());
+		menu->set_item_metadata(idx, class_name);
 	}
 	Ref<AnimationNode> clipb = EditorSettings::get_singleton()->get_resource_clipboard();
 
@@ -929,7 +921,7 @@ void AnimationNodeStateMachineEditor::_connection_draw(const Vector2 &p_from, co
 		state_machine_draw->draw_line(p_from, p_from.lerp(p_to, p_fade_ratio), fade_line_color, 2);
 	}
 
-	const int ICON_COUNT = sizeof(theme_cache.transition_icons) / sizeof(*theme_cache.transition_icons);
+	const int ICON_COUNT = std::size(theme_cache.transition_icons);
 	int icon_index = p_mode + (p_auto_advance ? ICON_COUNT / 2 : 0);
 	ERR_FAIL_COND(icon_index >= ICON_COUNT);
 	Ref<Texture2D> icon = theme_cache.transition_icons[icon_index];
@@ -1822,6 +1814,7 @@ AnimationNodeStateMachineEditor::AnimationNodeStateMachineEditor() {
 	tool_select->set_button_group(bg);
 	tool_select->set_pressed(true);
 	tool_select->set_tooltip_text(TTR("Select and move nodes.\nRMB: Add node at position clicked.\nShift+LMB+Drag: Connects the selected node with another node or creates a new node if you select an area without nodes."));
+	tool_select->set_accessibility_name(TTRC("Edit Nodes"));
 	tool_select->connect(SceneStringName(pressed), callable_mp(this, &AnimationNodeStateMachineEditor::_update_mode), CONNECT_DEFERRED);
 
 	tool_create = memnew(Button);
@@ -1830,6 +1823,7 @@ AnimationNodeStateMachineEditor::AnimationNodeStateMachineEditor() {
 	tool_create->set_toggle_mode(true);
 	tool_create->set_button_group(bg);
 	tool_create->set_tooltip_text(TTR("Create new nodes."));
+	tool_create->set_accessibility_name(TTRC("Create Nodes"));
 	tool_create->connect(SceneStringName(pressed), callable_mp(this, &AnimationNodeStateMachineEditor::_update_mode), CONNECT_DEFERRED);
 
 	tool_connect = memnew(Button);
@@ -1838,6 +1832,7 @@ AnimationNodeStateMachineEditor::AnimationNodeStateMachineEditor() {
 	tool_connect->set_toggle_mode(true);
 	tool_connect->set_button_group(bg);
 	tool_connect->set_tooltip_text(TTR("Connect nodes."));
+	tool_connect->set_accessibility_name(TTRC("Connect Nodes"));
 	tool_connect->connect(SceneStringName(pressed), callable_mp(this, &AnimationNodeStateMachineEditor::_update_mode), CONNECT_DEFERRED);
 
 	// Context-sensitive selection tools:
@@ -1850,6 +1845,7 @@ AnimationNodeStateMachineEditor::AnimationNodeStateMachineEditor() {
 	tool_erase->set_tooltip_text(TTR("Remove selected node or transition."));
 	tool_erase->connect(SceneStringName(pressed), callable_mp(this, &AnimationNodeStateMachineEditor::_erase_selected).bind(false));
 	tool_erase->set_disabled(true);
+	tool_erase->set_accessibility_name(TTRC("Erase"));
 	selection_tools_hb->add_child(tool_erase);
 
 	transition_tools_hb = memnew(HBoxContainer);
@@ -1865,6 +1861,7 @@ AnimationNodeStateMachineEditor::AnimationNodeStateMachineEditor() {
 	auto_advance->set_tooltip_text(TTR("New Transitions Should Auto Advance"));
 	auto_advance->set_toggle_mode(true);
 	auto_advance->set_pressed(true);
+	auto_advance->set_accessibility_name(TTRC("Transitions Auto Advance"));
 	transition_tools_hb->add_child(auto_advance);
 
 	//
@@ -1954,6 +1951,8 @@ AnimationNodeStateMachineEditor::AnimationNodeStateMachineEditor() {
 
 	delete_window = memnew(ConfirmationDialog);
 	delete_window->set_flag(Window::FLAG_RESIZE_DISABLED, true);
+	delete_window->set_flag(Window::FLAG_MINIMIZE_DISABLED, true);
+	delete_window->set_flag(Window::FLAG_MAXIMIZE_DISABLED, true);
 	add_child(delete_window);
 
 	delete_tree = memnew(Tree);
@@ -2019,16 +2018,16 @@ void EditorAnimationMultiTransitionEdit::_get_property_list(List<PropertyInfo> *
 		prop_transition_path.name = itos(i) + "/" + "transition_path";
 		p_list->push_back(prop_transition_path);
 
-		for (List<PropertyInfo>::Element *F = plist.front(); F; F = F->next()) {
-			if (F->get().name == "script" || F->get().name == "resource_name" || F->get().name == "resource_path" || F->get().name == "resource_local_to_scene") {
+		for (const PropertyInfo &pi : plist) {
+			if (pi.name == "script" || pi.name == "resource_name" || pi.name == "resource_path" || pi.name == "resource_local_to_scene") {
 				continue;
 			}
 
-			if (F->get().usage != PROPERTY_USAGE_DEFAULT) {
+			if (pi.usage != PROPERTY_USAGE_DEFAULT) {
 				continue;
 			}
 
-			PropertyInfo prop = F->get();
+			PropertyInfo prop = pi;
 			prop.name = itos(i) + "/" + prop.name;
 
 			p_list->push_back(prop);

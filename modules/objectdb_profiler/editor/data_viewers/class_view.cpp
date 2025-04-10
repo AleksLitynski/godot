@@ -251,7 +251,7 @@ void SnapshotClassView::_populate_object_list(GameStateSnapshot *p_snapshot, Tre
 		if (pair.value->type_name == class_name) {
 			TreeItem *item = p_list->create_item(root);
 			item->set_text(0, pair.value->get_name());
-			item->set_metadata(0, pair.value->remote_object_id);
+			item->set_metadata(0, pair.value->remote_object_ids[0]);
 			item->set_text_overrun_behavior(0, TextServer::OverrunBehavior::OVERRUN_NO_TRIMMING);
 			object_count++;
 		}
