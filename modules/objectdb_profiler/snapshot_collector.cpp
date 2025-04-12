@@ -110,17 +110,6 @@ void SnapshotCollector::snapshot_objects(Array *p_arr, Dictionary &p_snapshot_co
 			debug_data.extra_debug_data["node_children"] = children;
 		}
 
-		// auto property_iter = debug_data.properties.front();
-		// while (property_iter != nullptr) {
-		// 	auto current = property_iter;
-		// 	property_iter = property_iter->next();
-
-		// 	Ref<Resource> res = current->get().second;
-		// 	if (res.is_valid() && res->get_path().contains(".tscn")) {
-		// 		debug_data.properties.erase(current);
-		// 	}
-		// }
-
 		debugger_objects.push_back(debug_data);
 	}
 

@@ -40,7 +40,7 @@
 #include "scene/debugger/scene_debugger.h"
 #include "zlib.h"
 
-SnapshotDataObject::SnapshotDataObject(SceneDebuggerObject &p_obj, GameStateSnapshot *p_snapshot) :
+SnapshotDataObject::SnapshotDataObject(SceneDebuggerObject &p_obj, GameStateSnapshot *p_snapshot, ResourceCache &resource_cache) :
 		snapshot(p_snapshot) {
 	remote_object_id = p_obj.id;
 	type_name = p_obj.class_name;
@@ -48,41 +48,45 @@ SnapshotDataObject::SnapshotDataObject(SceneDebuggerObject &p_obj, GameStateSnap
 	for (const SceneDebuggerObject::SceneDebuggerProperty &prop : p_obj.properties) {
 		PropertyInfo pinfo = prop.first;
 		Variant pvalue = prop.second;
-		if (pinfo.name == "script") {
-			// scripts are handled separately
-			continue;
-		}
+		// pinfo.name = pinfo.name.trim_prefix("Node/").trim_prefix("Members/");
 
-		if (pinfo.type == Variant::OBJECT) {
-			if (pvalue.is_string()) {
-				String path = pvalue;
-				// If a resource is followed by a ::, it is a nested resource (like a sub_resource in a .tscn file).
-				// To get a reference to it, first we load the parent resource (the .tscn, for example), then,
-				// we load the child resource. The parent resource (dependency) should not be destroyed before the child
-				// resource (var) is loaded. We must declare dependency outside of the if statement to ensure this.
-				Ref<Resource> dependency;
-				if (path.contains("::")) {
-					// Built-in resource.
-					String base_path = path.get_slice("::", 0);
-					dependency = ResourceLoader::load(base_path);
+		if (pinfo.type == Variant::OBJECT && pvalue.is_string()) {
+			String path = pvalue;
+			// If a resource is followed by a ::, it is a nested resource (like a sub_resource in a .tscn file).
+			// To get a reference to it, first we load the parent resource (the .tscn, for example), then,
+			// we load the child resource. The parent resource (dependency) should not be destroyed before the child
+			// resource (pvalue) is loaded.
+			if (path.contains("::")) {
+				// Built-in resource.
+				String base_path = path.get_slice("::", 0);
+				if (!resource_cache.cache.has(base_path)) {
+					resource_cache.cache[base_path] = ResourceLoader::load(base_path);
+					resource_cache.misses++;
+				} else {
+					resource_cache.hits++;
 				}
-				pvalue = ResourceLoader::load(path); // TODO: figure out how to do this without a resource loader (just pull it from the snapshot...)
+			}
+			if (!resource_cache.cache.has(path)) {
+				resource_cache.cache[path] = ResourceLoader::load(path);
+				resource_cache.misses++;
+			} else {
+				resource_cache.hits++;
+			}
+			pvalue = resource_cache.cache[path];
 
-				if (pinfo.hint_string == "Script") {
-					if (get_script() != pvalue) {
-						set_script(Ref<RefCounted>());
-						Ref<Script> scr(pvalue);
-						if (scr.is_valid()) {
-							ScriptInstance *scr_instance = scr->placeholder_instance_create(this);
-							if (scr_instance) {
-								set_script_and_instance(pvalue, scr_instance);
-							}
+			if (pinfo.hint_string == "Script") {
+				if (get_script() != pvalue) {
+					set_script(Ref<RefCounted>());
+					Ref<Script> scr(pvalue);
+					if (scr.is_valid()) {
+						ScriptInstance *scr_instance = scr->placeholder_instance_create(this);
+						if (scr_instance) {
+							set_script_and_instance(pvalue, scr_instance);
 						}
 					}
 				}
 			}
 		}
-
 		prop_list.push_back(pinfo);
 		prop_values[pinfo.name] = pvalue;
 	}
@@ -343,6 +347,7 @@ Ref<GameStateSnapshotRef> GameStateSnapshot::create_ref(const String &p_snapshot
 	}
 	snapshot->snapshot_context = first_item;
 
+	SnapshotDataObject::ResourceCache resource_cache;
 	for (int i = 1; i < snapshot_data.size(); i += 4) {
 		SceneDebuggerObject obj;
 		obj.deserialize(uint64_t(snapshot_data[i + 0]), snapshot_data[i + 1], snapshot_data[i + 2]);
@@ -355,11 +360,12 @@ Ref<GameStateSnapshotRef> GameStateSnapshot::create_ref(const String &p_snapshot
 			continue;
 		}
 
-		snapshot->objects[obj.id] = memnew(SnapshotDataObject(obj, snapshot));
+		snapshot->objects[obj.id] = memnew(SnapshotDataObject(obj, snapshot, resource_cache));
 		snapshot->objects[obj.id]->extra_debug_data = (Dictionary)snapshot_data[i + 3];
 	}
 
 	snapshot->recompute_references();
+	print_line("Resource cache hits: " + String::num(resource_cache.hits) + ". Resource cache misses: " + String::num(resource_cache.misses));
 	return sn;
 }
 

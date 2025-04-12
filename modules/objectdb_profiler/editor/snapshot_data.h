@@ -57,7 +57,13 @@ public:
 	bool _get(const StringName &p_name, Variant &r_ret) const;
 	void _get_property_list(List<PropertyInfo> *p_list) const;
 
-	SnapshotDataObject(SceneDebuggerObject &p_obj, GameStateSnapshot *p_snapshot);
+	struct ResourceCache {
+		HashMap<String, Ref<Resource>> cache;
+		int misses = 0;
+		int hits = 0;
+	};
+
+	SnapshotDataObject(SceneDebuggerObject &p_obj, GameStateSnapshot *p_snapshot, ResourceCache &resource_cache);
 
 	String get_name();
 	String get_node_path();
