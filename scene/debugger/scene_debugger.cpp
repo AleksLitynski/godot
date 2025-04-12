@@ -644,13 +644,16 @@ void SceneDebuggerObject::deserialize(const Array &p_arr) {
 	CHECK_TYPE(p_arr[1], STRING);
 	CHECK_TYPE(p_arr[2], ARRAY);
 
-	id = uint64_t(p_arr[0]);
-	class_name = p_arr[1];
-	Array props = p_arr[2];
+	deserialize(uint64_t(p_arr[0]), p_arr[1], p_arr[2]);
+}
 
-	for (int i = 0; i < props.size(); i++) {
-		CHECK_TYPE(props[i], ARRAY);
-		Array prop = props[i];
+void SceneDebuggerObject::deserialize(uint64_t p_id, const String &p_class_name, const Array &p_props) {
+	id = p_id;
+	class_name = p_class_name;
+
+	for (int i = 0; i < p_props.size(); i++) {
+		CHECK_TYPE(p_props[i], ARRAY);
+		Array prop = p_props[i];
 
 		ERR_FAIL_COND(prop.size() != 6);
 		CHECK_TYPE(prop[0], STRING);

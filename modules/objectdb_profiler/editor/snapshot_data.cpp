@@ -40,6 +40,84 @@
 #include "scene/debugger/scene_debugger.h"
 #include "zlib.h"
 
+SnapshotDataObject::SnapshotDataObject(SceneDebuggerObject &p_obj, GameStateSnapshot *p_snapshot) :
+		snapshot(p_snapshot) {
+	remote_object_id = p_obj.id;
+	type_name = p_obj.class_name;
+
+	for (const SceneDebuggerObject::SceneDebuggerProperty &prop : p_obj.properties) {
+		PropertyInfo pinfo = prop.first;
+		Variant pvalue = prop.second;
+		if (pinfo.name == "script") {
+			// scripts are handled separately
+			continue;
+		}
+
+		if (pinfo.type == Variant::OBJECT) {
+			if (pvalue.is_string()) {
+				String path = pvalue;
+				// If a resource is followed by a ::, it is a nested resource (like a sub_resource in a .tscn file).
+				// To get a reference to it, first we load the parent resource (the .tscn, for example), then,
+				// we load the child resource. The parent resource (dependency) should not be destroyed before the child
+				// resource (var) is loaded. We must declare dependency outside of the if statement to ensure this.
+				Ref<Resource> dependency;
+				if (path.contains("::")) {
+					// Built-in resource.
+					String base_path = path.get_slice("::", 0);
+					dependency = ResourceLoader::load(base_path);
+				}
+				pvalue = ResourceLoader::load(path); // TODO: figure out how to do this without a resource loader (just pull it from the snapshot...)
+
+				if (pinfo.hint_string == "Script") {
+					if (get_script() != pvalue) {
+						set_script(Ref<RefCounted>());
+						Ref<Script> scr(pvalue);
+						if (scr.is_valid()) {
+							ScriptInstance *scr_instance = scr->placeholder_instance_create(this);
+							if (scr_instance) {
+								set_script_and_instance(pvalue, scr_instance);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		prop_list.push_back(pinfo);
+		prop_values[pinfo.name] = pvalue;
+	}
+}
+
+bool SnapshotDataObject::_get(const StringName &p_name, Variant &r_ret) const {
+	String name = p_name;
+
+	if (name.begins_with("Metadata/")) {
+		name = name.replace_first("Metadata/", "metadata/");
+	}
+	if (!prop_values.has(name)) {
+		return false;
+	}
+
+	r_ret = prop_values[p_name];
+	return true;
+}
+
+void SnapshotDataObject::_get_property_list(List<PropertyInfo> *p_list) const {
+	p_list->clear(); // Sorry, don't want any categories.
+	for (const PropertyInfo &prop : prop_list) {
+		if (prop.name == "script") {
+			// Skip the script property, it's always added by the non-virtual method.
+			continue;
+		}
+
+		p_list->push_back(prop);
+	}
+}
+
+void SnapshotDataObject::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("_is_read_only"), &SnapshotDataObject::_is_read_only);
+}
+
 String SnapshotDataObject::get_node_path() {
 	if (!is_node()) {
 		return "";
@@ -101,7 +179,7 @@ String SnapshotDataObject::get_name() {
 		}
 	}
 
-	return found_type_name + "_" + uitos(remote_object_ids[0]);
+	return found_type_name + "_" + uitos(remote_object_id);
 }
 
 bool SnapshotDataObject::is_refcounted() {
@@ -148,8 +226,7 @@ void GameStateSnapshot::_get_outbound_references(Variant &p_var, HashMap<String,
 		}
 		case Variant::Type::DICTIONARY: {
 			Dictionary dict = (Dictionary)p_var;
-			List<Variant> keys;
-			dict.get_key_list(&keys);
+			LocalVector<Variant> keys = dict.get_key_list();
 			for (Variant &k : keys) {
 				// The dictionary key _could be_ an object. If it is, we name the key property with the same name as the value, but with _key appended to it.
 				_get_outbound_references(k, r_ret_val, p_current_path + path_divider + (String)k + "_key");
@@ -209,9 +286,9 @@ void GameStateSnapshot::_get_rc_cycles(
 void GameStateSnapshot::recompute_references() {
 	for (const KeyValue<ObjectID, SnapshotDataObject *> &obj : objects) {
 		Dictionary values;
-		for (const KeyValue<StringName, TypedDictionary<uint64_t, Variant>> &kv : obj.value->prop_values) {
+		for (const KeyValue<StringName, Variant> &kv : obj.value->prop_values) {
 			// Should only ever be one entry in this context.
-			values[kv.key] = kv.value.begin()->value;
+			values[kv.key] = kv.value;
 		}
 
 		Variant values_variant(values);
@@ -267,11 +344,10 @@ Ref<GameStateSnapshotRef> GameStateSnapshot::create_ref(const String &p_snapshot
 	snapshot->snapshot_context = first_item;
 
 	for (int i = 1; i < snapshot_data.size(); i += 4) {
-		Array sliced = snapshot_data.slice(i);
 		SceneDebuggerObject obj;
-		obj.deserialize(sliced);
+		obj.deserialize(uint64_t(snapshot_data[i + 0]), snapshot_data[i + 1], snapshot_data[i + 2]);
 
-		if (sliced[3].get_type() != Variant::DICTIONARY) {
+		if (snapshot_data[i + 3].get_type() != Variant::DICTIONARY) {
 			ERR_PRINT("ObjectDB Snapshot could not be parsed. Extra debug data is not a Dictionary.");
 			return nullptr;
 		}
@@ -280,8 +356,7 @@ Ref<GameStateSnapshotRef> GameStateSnapshot::create_ref(const String &p_snapshot
 		}
 
 		snapshot->objects[obj.id] = memnew(SnapshotDataObject(obj, snapshot));
-		snapshot->objects[obj.id]->extra_debug_data = (Dictionary)sliced[3];
-		snapshot->objects[obj.id]->set_read_only(true);
+		snapshot->objects[obj.id]->extra_debug_data = (Dictionary)snapshot_data[i + 3];
 	}
 
 	snapshot->recompute_references();

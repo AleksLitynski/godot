@@ -53,17 +53,37 @@ void SnapshotCollector::snapshot_objects(Array *p_arr, Dictionary &p_snapshot_co
 	p_arr->clear();
 
 	// Gather all ObjectIDs first. The ObjectDB will be locked in debug_objects, so we can't serialize until it exits.
-	List<ObjectID> debugger_object_ids;
+
+	// In rare cases, the object may be deleted as the snapshot is taken. So, we store the object's class name to give users a clue about what went wrong.
+	List<Pair<ObjectID, String>> debugger_object_ids;
 	ObjectDB::debug_objects([](Object *p_obj, void *p_user_data) {
-		List<ObjectID> *debugger_object_ids_ptr = (List<ObjectID> *)p_user_data;
-		debugger_object_ids_ptr->push_back(p_obj->get_instance_id());
+		List<Pair<ObjectID, String>> *debugger_object_ids_ptr = (List<Pair<ObjectID, String>> *)p_user_data;
+		debugger_object_ids_ptr->push_back(Pair<ObjectID, String>(p_obj->get_instance_id(), p_obj->get_class_name()));
 	},
 			(void *)&debugger_object_ids);
 
 	// Get SnapshotDataTransportObject from ObjectID list now that DB is unlocked.
 	List<SnapshotDataTransportObject> debugger_objects;
-	for (ObjectID oid : debugger_object_ids) {
+	for (Pair<ObjectID, String> ids : debugger_object_ids) {
+		ObjectID oid = ids.first;
 		Object *obj = ObjectDB::get_instance(oid);
+
+		if (obj == nullptr) {
+			print_error("An object was deleted while the ObjectDB was being snapshotted. \
+				The debugger is automatically paused when snapshots are taken, so this should not happen. \
+				The missing object's ID was " +
+					String::num_uint64(oid) + ". \
+				 It's class was " +
+					ids.second + ". Consider reporting this.");
+			continue;
+		}
+
+		if (obj->get_class_name() == SNAME("EditorInterface")) {
+			// The EditorInterface + EditorNode is _kind of_ constructored in a debug game, but many properties rae null
+			// We can prevent it from being constructed, but that would break other projects so better to just skip it.
+			continue;
+		}
+
 		// This is the same way objects in the remote scene tree are seialized,
 		// but here we add a few extra properties via the extra_debug_data dictionary.
 		SnapshotDataTransportObject debug_data(obj);
@@ -89,6 +109,17 @@ void SnapshotCollector::snapshot_objects(Array *p_arr, Dictionary &p_snapshot_co
 			}
 			debug_data.extra_debug_data["node_children"] = children;
 		}
+
+		// auto property_iter = debug_data.properties.front();
+		// while (property_iter != nullptr) {
+		// 	auto current = property_iter;
+		// 	property_iter = property_iter->next();
+
+		// 	Ref<Resource> res = current->get().second;
+		// 	if (res.is_valid() && res->get_path().contains(".tscn")) {
+		// 		debug_data.properties.erase(current);
+		// 	}
+		// }
 
 		debugger_objects.push_back(debug_data);
 	}

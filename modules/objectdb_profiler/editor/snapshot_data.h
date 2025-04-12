@@ -35,8 +35,8 @@
 class GameStateSnapshot;
 class GameStateSnapshotRef;
 
-class SnapshotDataObject : public EditorDebuggerRemoteObjects {
-	GDCLASS(SnapshotDataObject, EditorDebuggerRemoteObjects);
+class SnapshotDataObject : public Object {
+	GDCLASS(SnapshotDataObject, Object);
 
 	HashSet<ObjectID> _unique_references(const HashMap<String, ObjectID> &p_refs);
 	String _get_script_name(Ref<Script> p_script);
@@ -50,14 +50,25 @@ public:
 	HashSet<ObjectID> get_unique_outbound_refernces();
 	HashSet<ObjectID> get_unique_inbound_references();
 
-	SnapshotDataObject(SceneDebuggerObject &p_obj, GameStateSnapshot *p_snapshot) :
-			EditorDebuggerRemoteObjects(p_obj), snapshot(p_snapshot) {}
+	uint64_t remote_object_id;
+	String type_name;
+	List<PropertyInfo> prop_list;
+	HashMap<StringName, Variant> prop_values;
+	bool _get(const StringName &p_name, Variant &r_ret) const;
+	void _get_property_list(List<PropertyInfo> *p_list) const;
+
+	SnapshotDataObject(SceneDebuggerObject &p_obj, GameStateSnapshot *p_snapshot);
 
 	String get_name();
 	String get_node_path();
 	bool is_refcounted();
 	bool is_node();
 	bool is_class(const String &p_base_class);
+
+protected:
+	// Snapshots are inheritly read-only. Can't edit the past.
+	bool _is_read_only() { return true; }
+	static void _bind_methods();
 };
 
 class GameStateSnapshot : public Object {

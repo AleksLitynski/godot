@@ -118,9 +118,9 @@ String SnapshotJsonView::_snapshot_to_json(GameStateSnapshot *p_snapshot) {
 		objects["prop_list"] = prop_list;
 
 		Dictionary prop_values;
-		for (const KeyValue<StringName, TypedDictionary<uint64_t, Variant>> &prop : obj.value->prop_values) {
+		for (const KeyValue<StringName, Variant> &prop : obj.value->prop_values) {
 			// should only ever be one entry in this context
-			prop_values[prop.key] = prop.value.begin()->value;
+			prop_values[prop.key] = prop.value;
 		}
 		obj_data["prop_values"] = prop_values;
 

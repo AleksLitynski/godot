@@ -412,11 +412,6 @@ ObjectDBProfilerPanel::ObjectDBProfilerPanel() {
 
 			last_snapshot_button = _add_snapshot_button(name_parts[0], snapshot_dir->get_current_dir().path_join(file_name));
 		}
-		// Simulate clicking on the last snapshot we loaded from disk.
-		if (last_snapshot_button != nullptr) {
-			snapshot_list->set_selected(last_snapshot_button);
-			snapshot_list->ensure_cursor_is_visible();
-		}
 	}
 }
 
